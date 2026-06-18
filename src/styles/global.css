@@ -53,3 +53,8 @@ body{
 .loading-message{font-size:1rem;color:var(--muted);font-weight:600}
 
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* Small badge for local readings */
+.badge{display:inline-block;padding:0.25rem 0.5rem;border-radius:999px;font-size:0.8rem;font-weight:600;color:#111;background:rgba(255,255,255,0.9);margin-left:8px}
+.badge--local{background:#ffd28a;color:#2b1b00}
+

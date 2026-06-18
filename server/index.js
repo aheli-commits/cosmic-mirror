@@ -13,6 +13,14 @@ if (!apiKey) {
 
 const openai = apiKey ? new OpenAI({ apiKey }) : null
 
+// Simple in-memory metrics for fallback usage
+const METRICS = {
+  requests: 0,
+  openai: 0,
+  local: 0,
+  quotaFallbacks: 0
+}
+
 // Local fallback generator using simple zodiac-based templates
 function getZodiacSign(dateStr) {
   try {
@@ -119,9 +127,13 @@ function generateLocalReading(birthDate, birthTime, birthLocation) {
 
 app.post('/api/reading', async (req, res) => {
   const { birthDate, birthTime, birthLocation } = req.body || {}
+  METRICS.requests += 1
   if (!openai) {
     console.warn('OpenAI API key not configured — returning local reading')
     const local = generateLocalReading(birthDate, birthTime, birthLocation)
+    res.set('X-Reading-Source', 'local')
+    METRICS.local += 1
+    console.log('metrics:', METRICS)
     return res.json(local)
   }
 
@@ -158,6 +170,9 @@ Return ONLY valid JSON, no additional text.`
       throw new Error('Response missing required fields')
     }
 
+    res.set('X-Reading-Source', 'openai')
+    METRICS.openai += 1
+    console.log('metrics:', METRICS)
     res.json(result)
   } catch (error) {
     console.error('OpenAI API error:', error && error.message)
@@ -170,6 +185,10 @@ Return ONLY valid JSON, no additional text.`
     if (isQuota) {
       console.warn('OpenAI quota detected — returning local reading')
       const local = generateLocalReading(birthDate, birthTime, birthLocation)
+      res.set('X-Reading-Source', 'local')
+      METRICS.local += 1
+      METRICS.quotaFallbacks += 1
+      console.log('metrics:', METRICS)
       return res.json(local)
     }
 
@@ -182,6 +201,11 @@ Return ONLY valid JSON, no additional text.`
 
 app.get('/api/reading', (req, res) => {
   res.status(400).json({ error: 'POST with birth data required' })
+})
+
+// Simple metrics endpoint
+app.get('/metrics', (req, res) => {
+  res.json(METRICS)
 })
 
 const port = process.env.PORT || 4000
