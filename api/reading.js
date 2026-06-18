@@ -110,6 +110,24 @@ function isQuotaError(error) {
   return /quota|rate limit|rate_limit|insufficient_quota|429/i.test(msg)
 }
 
+function parseJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = ''
+    req.on('data', (chunk) => {
+      body += chunk
+    })
+    req.on('end', () => {
+      if (!body) return resolve({})
+      try {
+        resolve(JSON.parse(body))
+      } catch (err) {
+        reject(err)
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
 async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(400).json({ error: 'POST with birth data required' })
@@ -118,7 +136,7 @@ async function handler(req, res) {
 
   let body
   try {
-    body = await req.json()
+    body = await parseJsonBody(req)
   } catch (err) {
     res.status(400).json({ error: 'Invalid JSON body' })
     return
