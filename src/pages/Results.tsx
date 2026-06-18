@@ -79,8 +79,8 @@ export default function Results() {
   return (
     <main className="page container">
       <h2 className="section-title">Your Cosmic Reflection</h2>
-      <p className="subtitle" style={{ marginTop: 8, maxWidth: 720 }}>
-        Take a quiet moment to read each short reflection. Let the phrases land, notice what resonates, and consider what you might explore next.
+      <p className="subtitle" style={{ marginTop: 10, maxWidth: 720, fontStyle: 'italic' }}>
+        Breathe in. These brief reflections are small mirrors — read slowly, feel what stirs, and allow a single phrase to open a new question.
       </p>
 
       <div style={{ height: 28 }} />
@@ -95,13 +95,13 @@ export default function Results() {
         )}
       </div>
 
-      <div style={{ marginTop: 28, display: 'flex', gap: 12, justifyContent: 'space-between', width: '100%' }}>
-        <button className="btn" onClick={onChangeDetails}>
+      <div style={{ marginTop: 40, display: 'flex', gap: 12, justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+        <button className="btn btn--ghost" onClick={onChangeDetails} aria-label="Change birth details">
           ← Change Birth Details
         </button>
 
         <div style={{ marginLeft: 'auto' }}>
-          <button className="btn" onClick={generateAnother} disabled={loading}>
+          <button className="btn btn--primary" onClick={generateAnother} disabled={loading} aria-label="Generate another reflection">
             {loading ? 'Generating…' : '✨ Generate Another Reflection'}
           </button>
         </div>
