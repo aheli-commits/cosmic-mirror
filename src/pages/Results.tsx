@@ -77,7 +77,7 @@ export default function Results() {
   const entries = results ? Object.entries(results).filter(([k]) => k !== 'received') : []
 
   return (
-    <main className="page container">
+    <main className="page container fade-in-page">
       <h2 className="section-title">Your Cosmic Reflection</h2>
       <p className="subtitle" style={{ marginTop: 10, maxWidth: 720, fontStyle: 'italic' }}>
         Breathe in. These brief reflections are small mirrors — read slowly, feel what stirs, and allow a single phrase to open a new question.

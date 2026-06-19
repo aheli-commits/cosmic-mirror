@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getSunSign, getMoonSign } from '../utils/astrology'
 
 const MESSAGES = [
   'Mapping the stars...',
@@ -50,7 +51,22 @@ export default function Loading() {
 
     Promise.all([timer, fetcher]).then(([, data]) => {
       if (cancelled) return
-      navigate('/results', { state: { results: data } })
+      
+      // Calculate sun and moon signs
+      const sunSign = getSunSign((payload as any).date || '')
+      const hasBirthTime = Boolean((payload as any).time)
+      const moonSign = hasBirthTime
+        ? getMoonSign((payload as any).date || '', (payload as any).time || '12:00')
+        : ''
+
+      navigate('/cosmic-blueprint', { 
+        state: { 
+          sunSign,
+          moonSign,
+          hasBirthTime,
+          results: data
+        } 
+      })
     })
 
     return () => {
