@@ -16,7 +16,8 @@ const openai = apiKey ? new OpenAI({ apiKey }) : null
 // Simple in-memory metrics for fallback usage
 const METRICS = {
   requests: 0,
-  openai: 0,
+  openaiSuccess: 0,
+  openaiRetrySuccess: 0,
   local: 0,
   quotaFallbacks: 0
 }
@@ -310,6 +311,181 @@ function generateLocalReading(birthDate, birthTime, birthLocation) {
   }
 }
 
+const REQUIRED_FIELDS = ['personality', 'strengths', 'challenges', 'relationships', 'career']
+const GENERIC_PHRASES = [
+  'warm and steady',
+  'brings calm to others',
+  'you are practical',
+  'you communicate well',
+  'hardworking and disciplined',
+  'you are disciplined',
+  'trust your instincts',
+  'follow your heart',
+  'spiritual',
+  'cosmic',
+  'vibes',
+  'destiny',
+  'soul',
+  'manifest'
+]
+
+function countWords(text) {
+  return String(text).trim().split(/\s+/).filter(Boolean).length
+}
+
+function normalizeText(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasGenericPhrase(text) {
+  const lower = normalizeText(text)
+  return GENERIC_PHRASES.some((phrase) => lower.includes(phrase))
+}
+
+function tokenOverlap(a, b) {
+  const aTokens = new Set(normalizeText(a).split(' ').filter(Boolean))
+  const bTokens = new Set(normalizeText(b).split(' ').filter(Boolean))
+
+  if (!aTokens.size || !bTokens.size) return 0
+
+  let common = 0
+  for (const token of aTokens) {
+    if (bTokens.has(token)) common += 1
+  }
+
+  return common / Math.min(aTokens.size, bTokens.size)
+}
+
+function validateReading(reading) {
+  if (!reading || typeof reading !== 'object') {
+    return { valid: false, code: 'invalid_json', reason: 'Reading is not an object' }
+  }
+
+  const normalized = {}
+
+  for (const field of REQUIRED_FIELDS) {
+    const value = reading[field]
+    if (!value || typeof value !== 'string') {
+      return { valid: false, code: 'missing_field', reason: `Missing or invalid field: ${field}` }
+    }
+
+    const wordCount = countWords(value)
+    if (wordCount < 40) {
+      return { valid: false, code: 'too_short', reason: `${field} is too short (${wordCount} words)` }
+    }
+
+    if (hasGenericPhrase(value)) {
+      return { valid: false, code: 'banned_phrase', reason: `${field} contains a banned generic phrase` }
+    }
+
+    normalized[field] = normalizeText(value)
+  }
+
+  for (let i = 0; i < REQUIRED_FIELDS.length; i += 1) {
+    for (let j = i + 1; j < REQUIRED_FIELDS.length; j += 1) {
+      const a = normalized[REQUIRED_FIELDS[i]]
+      const b = normalized[REQUIRED_FIELDS[j]]
+      if (a === b) {
+        return {
+          valid: false,
+          code: 'too_repetitive',
+          reason: `${REQUIRED_FIELDS[i]} and ${REQUIRED_FIELDS[j]} are identical`
+        }
+      }
+      if (tokenOverlap(a, b) >= 0.33) {
+        return {
+          valid: false,
+          code: 'too_repetitive',
+          reason: `${REQUIRED_FIELDS[i]} and ${REQUIRED_FIELDS[j]} are too similar`
+        }
+      }
+    }
+  }
+
+  return { valid: true }
+}
+
+async function fetchOpenAIReading(prompt) {
+  const message = await openai.chat.completions.create({
+    model: 'gpt-3.5-turbo',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+    max_tokens: 500
+  })
+
+  const responseText = message.choices[0]?.message?.content || '{}'
+  try {
+    return { reading: JSON.parse(responseText), parseError: null, raw: responseText }
+  } catch (parseError) {
+    return { reading: null, parseError, raw: responseText }
+  }
+}
+
+async function generateOpenAIReading(sign, birthDate, birthTime, birthLocation) {
+  const basePrompt = `You are the insight writer for Cosmic Mirror. Your job is to create a psychologically nuanced self-reflection based on astrological context. The experience should feel like looking into a mirror—not reading a generic horoscope.
+
+Write with emotional intelligence, psychological depth, and quiet precision. Do not sound like a mystical astrologer, life coach, or motivational speaker. Avoid spiritual fluff, generic affirmations, and therapy clichés.
+
+Sun Sign: ${sign}
+Birth Date: ${birthDate || 'unknown'}
+Birth Time: ${birthTime || 'unknown'}
+Birth Location: ${birthLocation || 'unknown'}
+
+Return exactly five JSON fields:
+{
+  "personality": "Your Inner Nature",
+  "strengths": "Your Gifts",
+  "challenges": "Your Growth Edge",
+  "relationships": "The Way You Connect",
+  "career": "Where You Thrive"
+}
+
+Each section must feel distinct and personalized. For each section:
+1. Begin with a visible outer trait people notice first.
+2. Reveal a deeper emotional pattern, fear, motivation, or defense mechanism.
+3. Include one contradiction, tension, or blind spot.
+4. End with one grounded insight or reflective takeaway.
+
+Important rules:
+- Each section must feel meaningfully different.
+- Do NOT repeat phrases, wording, or ideas across sections.
+- Avoid generic traits like: “You are practical”, “You communicate well”, or “You are disciplined”.
+- Avoid vague feel-good statements.
+- Prioritize behavioral specificity and emotional truth.
+
+Write each field in 50–90 words. Return ONLY valid JSON.`
+
+  const retryPrompt = `${basePrompt}
+
+If this response fails validation, rewrite the same five fields with the same rules. Keep every section distinct, avoid generic language, and return ONLY valid JSON.`
+
+  let response = await fetchOpenAIReading(basePrompt)
+  let validation = response.parseError
+    ? { valid: false, code: 'invalid_json', reason: 'Response is not valid JSON' }
+    : validateReading(response.reading)
+
+  if (validation.valid) {
+    return { reading: response.reading, source: 'openai' }
+  }
+
+  console.warn('OpenAI reading validation failed, retrying once:', validation.code, validation.reason)
+
+  response = await fetchOpenAIReading(retryPrompt)
+  validation = response.parseError
+    ? { valid: false, code: 'invalid_json', reason: 'Response is not valid JSON' }
+    : validateReading(response.reading)
+
+  if (validation.valid) {
+    return { reading: response.reading, source: 'openai_retry' }
+  }
+
+  throw new Error(`Invalid reading after retry: ${validation.code} - ${validation.reason}`)
+}
+
 app.post('/api/reading', async (req, res) => {
   const { birthDate, birthTime, birthLocation } = req.body || {}
   METRICS.requests += 1
@@ -324,63 +500,34 @@ app.post('/api/reading', async (req, res) => {
 
   try {
     const sign = getZodiacSign(birthDate)
-    const prompt = `You are a psychologically grounded insight writer crafting a cosmic self-reflection report. Use the birth information to create a warm, sharp, emotionally intelligent reading that feels grounded, specific, and human. Avoid generic horoscope language, flattering platitudes, and cheesy spiritual phrases.
+    const { reading, source } = await generateOpenAIReading(sign, birthDate, birthTime, birthLocation)
 
-Sun Sign: ${sign}
-Birth Date: ${birthDate || 'unknown'}
-Birth Time: ${birthTime || 'unknown'}
-Birth Location: ${birthLocation || 'unknown'}
-
-Provide exactly five JSON fields with these labels:
-{
-  "personality": "Your Inner Nature",
-  "strengths": "Your Gifts",
-  "challenges": "Your Growth Edge",
-  "relationships": "The Way You Connect",
-  "career": "Where You Thrive"
-}
-
-Each field should be 50-100 words and written as 2-4 sentences. For every section, include:
-1. A surface trait others are likely to notice.
-2. A hidden nuance or quieter quality beneath that first impression.
-3. A tension, contradiction, or inner complexity.
-4. A reflective takeaway that feels practical and resonant.
-
-Write with nuanced language, emotional insight, and a sense of layered human experience. Return ONLY valid JSON with no extra text.`
-
-    const message = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 500
-    })
-
-    const responseText = message.choices[0]?.message?.content || '{}'
-    const result = JSON.parse(responseText)
-
-    // Validate response has required fields
-    if (!result.personality || !result.strengths || !result.challenges || !result.relationships || !result.career) {
-      throw new Error('Response missing required fields')
+    res.set('X-Reading-Source', source)
+    METRICS.openaiSuccess += 1
+    if (source === 'openai_retry') {
+      METRICS.openaiRetrySuccess += 1
     }
-
-    res.set('X-Reading-Source', 'openai')
-    METRICS.openai += 1
     console.log('metrics:', METRICS)
-    res.json(result)
+    return res.json(reading)
   } catch (error) {
-    console.error('OpenAI API error:', error && error.message)
-
-    // Detect quota or rate-limit style errors and fall back to local generator
     const msg = (error && (error.message || '')) || ''
     const status = (error && (error.status || error.statusCode || (error.response && error.response.status))) || 0
     const isQuota = /quota|rate limit|rate_limit|insufficient_quota|429/i.test(msg) || status === 429
+    const isInvalidResponse = /invalid_json|too_short|banned_phrase|too_repetitive|Invalid reading after retry/i.test(msg)
 
-    if (isQuota) {
-      console.warn('OpenAI quota detected — returning local reading')
+    console.error('OpenAI API error:', msg)
+    if (isInvalidResponse) {
+      console.warn('OpenAI validation fallback:', msg)
+    }
+
+    if (isQuota || isInvalidResponse) {
+      console.warn('Using fallback reading source')
       const local = generateLocalReading(birthDate, birthTime, birthLocation)
-      res.set('X-Reading-Source', 'local')
+      res.set('X-Reading-Source', 'fallback')
       METRICS.local += 1
-      METRICS.quotaFallbacks += 1
+      if (isQuota) {
+        METRICS.quotaFallbacks += 1
+      }
       console.log('metrics:', METRICS)
       return res.json(local)
     }
@@ -398,7 +545,11 @@ app.get('/api/reading', (req, res) => {
 
 // Simple metrics endpoint
 app.get('/metrics', (req, res) => {
-  res.json(METRICS)
+  const fallbackRate = METRICS.requests ? METRICS.local / METRICS.requests : 0
+  res.json({
+    ...METRICS,
+    fallbackRate
+  })
 })
 
 const port = process.env.PORT || 4000
