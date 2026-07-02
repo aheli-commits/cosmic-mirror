@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { getSunSign, getMoonSign } from '../utils/astrology'
 
 const MESSAGES = [
-  'Mapping the stars...',
-  'Interpreting celestial patterns...',
-  'Translating your cosmic blueprint...'
+  'Reading emotional patterns...',
+  'Mapping contradictions...',
+  'Interpreting archetypal energy...',
+  'Building your cosmic blueprint...'
 ]
 
 export default function Loading() {
@@ -13,14 +14,12 @@ export default function Loading() {
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
-    const interval = setInterval(() => setIndex(i => (i + 1) % MESSAGES.length), 1000)
+    const interval = setInterval(() => setIndex(i => (i + 1) % MESSAGES.length), 1400)
 
     let cancelled = false
 
-    // Minimum duration timer
     const timer = new Promise(resolve => setTimeout(resolve, 3000))
 
-    // Prepare payload from storage
     const raw = sessionStorage.getItem('birthData') || '{}'
     let payload = {}
     try {
@@ -41,7 +40,6 @@ export default function Loading() {
           })
         })
         const data = await res.json()
-        // Save results for the results page fallback
         sessionStorage.setItem('reading', JSON.stringify(data))
         return data
       } catch (e) {
@@ -51,21 +49,20 @@ export default function Loading() {
 
     Promise.all([timer, fetcher]).then(([, data]) => {
       if (cancelled) return
-      
-      // Calculate sun and moon signs
+
       const sunSign = getSunSign((payload as any).date || '')
       const hasBirthTime = Boolean((payload as any).time)
       const moonSign = hasBirthTime
         ? getMoonSign((payload as any).date || '', (payload as any).time || '12:00')
         : ''
 
-      navigate('/cosmic-blueprint', { 
-        state: { 
+      navigate('/cosmic-blueprint', {
+        state: {
           sunSign,
           moonSign,
           hasBirthTime,
           results: data
-        } 
+        }
       })
     })
 
@@ -78,8 +75,14 @@ export default function Loading() {
   return (
     <main className="page center">
       <div className="hero loading-screen">
-        <div className="spinner" aria-hidden></div>
+        <div className="loading-orbit" aria-hidden>
+          <div className="loading-core" />
+          <div className="loading-ring ring-one" />
+          <div className="loading-ring ring-two" />
+        </div>
+        <p className="loading-eyebrow">Cosmic Mirror</p>
         <p className="loading-message">{MESSAGES[index]}</p>
+        <p className="loading-hint">This usually takes a few seconds.</p>
       </div>
     </main>
   )

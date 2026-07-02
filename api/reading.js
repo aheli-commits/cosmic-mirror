@@ -350,7 +350,7 @@ Birth Date: ${birthDate || 'unknown'}
 Birth Time: ${birthTime || 'unknown'}
 Birth Location: ${birthLocation || 'unknown'}
 
-Provide a reading in JSON format with these exact fields (keep responses concise, 1-2 sentences each):
+Provide a reading in JSON format with these exact fields. Each field should feel specific, emotionally intelligent, and grounded in a real behavioral pattern rather than generic astrology language.
 {
   "personality": "Description of personality traits",
   "strengths": "Key strengths and abilities",
@@ -359,7 +359,12 @@ Provide a reading in JSON format with these exact fields (keep responses concise
   "career": "Career path and professional insights"
 }
 
-Return ONLY valid JSON, no additional text.`
+Important rules:
+- Avoid generic lines such as “You value independence” or “You are compassionate.”
+- Show the insight through concrete behaviors, contradictions, and emotional habits.
+- Include one tension or blind spot in each field.
+- Keep each section concise but vivid, around 2 sentences.
+- Return ONLY valid JSON, no additional text.`
 
     const message = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',

@@ -42,8 +42,17 @@ export default function Results() {
 
   const generateAnother = useCallback(async () => {
     setError(null)
-    setLoading(true)
+
     try {
+      const cached = sessionStorage.getItem('reading')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        sessionStorage.setItem('reading', JSON.stringify(parsed))
+        setResults(parsed)
+        return
+      }
+
+      setLoading(true)
       const raw = sessionStorage.getItem('birthData') || '{}'
       const payload = JSON.parse(raw)
       const res = await fetch('/api/reading', {
@@ -78,34 +87,44 @@ export default function Results() {
 
   return (
     <main className="page container fade-in-page">
-      <h2 className="section-title">Your Cosmic Reflection</h2>
-      <p className="subtitle" style={{ marginTop: 10, maxWidth: 720, fontStyle: 'italic' }}>
-        Breathe in. These brief reflections are small mirrors — read slowly, feel what stirs, and allow a single phrase to open a new question.
-      </p>
+      <section className="results-shell">
+        <div className="results-hero">
+          <p className="eyebrow">Cosmic mirror reading</p>
+          <h2 className="section-title">Your Cosmic Reflection</h2>
+          <p className="subtitle results-intro-copy">
+            Breathe in. These reflections are small mirrors — read slowly, notice what feels true, and let one phrase stay with you.
+          </p>
+          <div className="results-meta">
+            <span className="pill">Personalized</span>
+            <span className={`pill ${readingSource === 'local' ? 'pill--local' : ''}`}>
+              {readingSource === 'local' ? 'Local reading' : readingSource ? 'Refined reading' : 'Ready to explore'}
+            </span>
+          </div>
+        </div>
 
-      <div style={{ height: 28 }} />
+        <div className="cards">
+          {entries.length ? (
+            entries.map(([k, v]) => (
+              <Card key={k} title={TITLE_MAP[k] || k} content={v as string} />
+            ))
+          ) : (
+            <p className="subtitle">No results available. Please return and try again.</p>
+          )}
+        </div>
 
-      <div className="cards">
-        {entries.length ? (
-          entries.map(([k, v]) => (
-            <Card key={k} title={TITLE_MAP[k] || k} content={v as string} />
-          ))
-        ) : (
-          <p className="subtitle">No results available. Please return and try again.</p>
-        )}
-      </div>
+        <div className="results-actions">
+          <button className="btn btn--ghost" onClick={onChangeDetails} aria-label="Change birth details">
+            ← Change Birth Details
+          </button>
 
-      <div style={{ marginTop: 40, display: 'flex', gap: 12, justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-        <button className="btn btn--ghost" onClick={onChangeDetails} aria-label="Change birth details">
-          ← Change Birth Details
-        </button>
-
-        <div style={{ marginLeft: 'auto' }}>
           <button className="btn btn--primary" onClick={generateAnother} disabled={loading} aria-label="Generate another reflection">
             {loading ? 'Generating…' : '✨ Generate Another Reflection'}
           </button>
+          <button className="btn btn--ghost" onClick={() => navigate('/premium-upsell')} aria-label="Unlock full cosmic blueprint">
+            Unlock My Full Cosmic Blueprint 🌙
+          </button>
         </div>
-      </div>
+      </section>
     </main>
   )
 }

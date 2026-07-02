@@ -447,21 +447,22 @@ Return exactly five JSON fields:
 Each section must feel distinct and personalized. For each section:
 1. Begin with a visible outer trait people notice first.
 2. Reveal a deeper emotional pattern, fear, motivation, or defense mechanism.
-3. Include one contradiction, tension, or blind spot.
+3. Include one contradiction, tension, or blind spot that feels specific and lived-in.
 4. End with one grounded insight or reflective takeaway.
 
 Important rules:
 - Each section must feel meaningfully different.
 - Do NOT repeat phrases, wording, or ideas across sections.
-- Avoid generic traits like: “You are practical”, “You communicate well”, or “You are disciplined”.
-- Avoid vague feel-good statements.
-- Prioritize behavioral specificity and emotional truth.
+- Avoid generic traits and generic lines such as “You value independence” or “You are compassionate.”
+- Prefer concrete behavioral patterns and emotional habits, such as “You often carry burdens quietly rather than ask for help.”
+- Use precise, human language and subtle psychological insight.
+- Make the reading feel accurate enough that a person would want to save it, share it, or generate another one.
 
-Write each field in 50–90 words. Return ONLY valid JSON.`
+Write each field in 60–90 words. Return ONLY valid JSON.`
 
   const retryPrompt = `${basePrompt}
 
-If this response fails validation, rewrite the same five fields with the same rules. Keep every section distinct, avoid generic language, and return ONLY valid JSON.`
+If this response fails validation, rewrite the same five fields with the same rules. Keep every section distinct, avoid generic language, and return ONLY valid JSON. Make the language more specific, less abstract, and more emotionally revealing.`
 
   let response = await fetchOpenAIReading(basePrompt)
   let validation = response.parseError
