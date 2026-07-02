@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSunSign, getMoonSign } from '../utils/astrology'
+import { getSunSign, getMoonSign, getRisingSign } from '../utils/astrology'
 
 const MESSAGES = [
   'Reading emotional patterns...',
@@ -36,7 +36,12 @@ export default function Loading() {
           body: JSON.stringify({
             birthDate: (payload as any).date || null,
             birthTime: (payload as any).time || null,
-            birthLocation: (payload as any).location || null
+            birthLocation: (payload as any).location || null,
+            astrology: {
+              sunSign: getSunSign((payload as any).date || ''),
+              moonSign: (payload as any).time ? getMoonSign((payload as any).date || '', (payload as any).time || '12:00') : '',
+              risingSign: getRisingSign((payload as any).date || '', (payload as any).time || '12:00')
+            }
           })
         })
         const data = await res.json()
@@ -50,16 +55,33 @@ export default function Loading() {
     Promise.all([timer, fetcher]).then(([, data]) => {
       if (cancelled) return
 
-      const sunSign = getSunSign((payload as any).date || '')
+      const birthDate = (payload as any).date || ''
+      const birthTime = (payload as any).time || '12:00'
+      const sunSign = getSunSign(birthDate)
       const hasBirthTime = Boolean((payload as any).time)
       const moonSign = hasBirthTime
-        ? getMoonSign((payload as any).date || '', (payload as any).time || '12:00')
+        ? getMoonSign(birthDate, birthTime)
         : ''
+      const risingSign = getRisingSign(birthDate, birthTime)
+      const readingContext = {
+        birthDate,
+        birthTime,
+        birthLocation: (payload as any).location || null,
+        astrology: {
+          sunSign,
+          moonSign,
+          risingSign
+        }
+      }
+
+      console.log('[reading-context]', readingContext)
+      sessionStorage.setItem('readingContext', JSON.stringify(readingContext))
 
       navigate('/cosmic-blueprint', {
         state: {
           sunSign,
           moonSign,
+          risingSign,
           hasBirthTime,
           results: data
         }

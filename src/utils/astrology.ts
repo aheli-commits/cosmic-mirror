@@ -35,9 +35,6 @@ export function getSunSign(dateStr: string): string {
 export function getMoonSign(dateStr: string, timeStr: string = '12:00'): string {
   try {
     const d = new Date(dateStr)
-    const month = d.getUTCMonth() + 1
-    const day = d.getUTCDate()
-    const year = d.getUTCFullYear()
     
     // Parse time
     const [hours, minutes] = timeStr.split(':').map(Number)
@@ -53,6 +50,20 @@ export function getMoonSign(dateStr: string, timeStr: string = '12:00'): string 
     let moonSignIndex = Math.floor(seed / 30)
     
     return ZODIAC_SIGNS[moonSignIndex % 12]
+  } catch (e) {
+    return 'Unknown'
+  }
+}
+
+export function getRisingSign(dateStr: string, timeStr: string = '12:00'): string {
+  try {
+    const d = new Date(dateStr)
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    const adjustedHour = hours + minutes / 60
+    const daySeed = d.getUTCDate() + d.getUTCMonth() + 1
+    const timeSeed = Math.floor(adjustedHour * 3)
+    const signIndex = (daySeed + timeSeed) % ZODIAC_SIGNS.length
+    return ZODIAC_SIGNS[signIndex]
   } catch (e) {
     return 'Unknown'
   }

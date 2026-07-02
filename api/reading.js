@@ -275,8 +275,12 @@ function pickTemplate(sign, field, seed) {
   return list[Math.abs(seed) % list.length]
 }
 
-function generateLocalReading(birthDate, birthTime, birthLocation) {
-  const sign = getZodiacSign(birthDate)
+function generateLocalReading(context = {}) {
+  const birthDate = context.birthDate || null
+  const birthTime = context.birthTime || null
+  const birthLocation = context.birthLocation || null
+  const astrology = context.astrology || {}
+  const sign = astrology.sunSign || getZodiacSign(birthDate)
   let seed = 0
   try {
     const d = new Date(birthDate)
@@ -286,6 +290,8 @@ function generateLocalReading(birthDate, birthTime, birthLocation) {
   }
   if (birthTime) seed += String(birthTime).split(':')[0] || 0
   if (birthLocation) seed += birthLocation.length
+  if (astrology.moonSign) seed += astrology.moonSign.length
+  if (astrology.risingSign) seed += astrology.risingSign.length
 
   return {
     personality: pickTemplate(sign, 'personality', seed),
@@ -334,10 +340,11 @@ async function handler(req, res) {
     return
   }
 
-  const { birthDate, birthTime, birthLocation } = body || {}
+  const { birthDate, birthTime, birthLocation, astrology } = body || {}
+  const readingContext = { birthDate, birthTime, birthLocation, astrology }
 
   if (!openai) {
-    const local = generateLocalReading(birthDate, birthTime, birthLocation)
+    const local = generateLocalReading(readingContext)
     res.setHeader('X-Reading-Source', 'local')
     res.status(200).json(local)
     return
@@ -346,6 +353,9 @@ async function handler(req, res) {
   try {
     const prompt = `You are an astrology and self-discovery expert. Generate a personalized cosmic reading based on the following birth information:
 
+Sun Sign: ${astrology?.sunSign || 'unknown'}
+Moon Sign: ${astrology?.moonSign || 'unknown'}
+Rising Sign: ${astrology?.risingSign || 'unknown'}
 Birth Date: ${birthDate || 'unknown'}
 Birth Time: ${birthTime || 'unknown'}
 Birth Location: ${birthLocation || 'unknown'}
@@ -384,7 +394,7 @@ Important rules:
     res.status(200).json(result)
   } catch (error) {
     if (isQuotaError(error)) {
-      const local = generateLocalReading(birthDate, birthTime, birthLocation)
+      const local = generateLocalReading(readingContext)
       res.setHeader('X-Reading-Source', 'local')
       res.status(200).json(local)
       return

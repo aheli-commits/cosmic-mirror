@@ -278,19 +278,17 @@ function pickTemplate(sign, field, seed) {
   const generic = TEMPLATES.generic[field]
   const overrides = SIGN_OVERRIDES[sign]
   const overrideList = (overrides && overrides[field]) ? overrides[field] : []
-  const list = overrideList.concat(generic)
+  const list = overrideList.length ? overrideList : generic
   const index = Math.abs(seed) % list.length
-  const chosen = list[index]
-
-  if (index < overrideList.length && generic.length) {
-    return `${chosen} ${generic[0]}`
-  }
-
-  return chosen
+  return list[index]
 }
 
-function generateLocalReading(birthDate, birthTime, birthLocation) {
-  const sign = getZodiacSign(birthDate)
+function generateLocalReading(context = {}) {
+  const birthDate = context.birthDate || null
+  const birthTime = context.birthTime || null
+  const birthLocation = context.birthLocation || null
+  const astrology = context.astrology || {}
+  const sign = astrology.sunSign || getZodiacSign(birthDate)
   // seed deterministically from date/day/time/location
   let seed = 0
   try {
@@ -301,6 +299,8 @@ function generateLocalReading(birthDate, birthTime, birthLocation) {
   }
   if (birthTime) seed += String(birthTime).split(':')[0] || 0
   if (birthLocation) seed += birthLocation.length
+  if (astrology.moonSign) seed += astrology.moonSign.length
+  if (astrology.risingSign) seed += astrology.risingSign.length
 
   return {
     personality: pickTemplate(sign, 'personality', seed),
@@ -425,12 +425,16 @@ async function fetchOpenAIReading(prompt) {
   }
 }
 
-async function generateOpenAIReading(sign, birthDate, birthTime, birthLocation) {
+async function generateOpenAIReading(readingContext) {
+  const { birthDate, birthTime, birthLocation, astrology = {} } = readingContext || {}
+  const sign = astrology.sunSign || getZodiacSign(birthDate)
   const basePrompt = `You are the insight writer for Cosmic Mirror. Your job is to create a psychologically nuanced self-reflection based on astrological context. The experience should feel like looking into a mirror—not reading a generic horoscope.
 
 Write with emotional intelligence, psychological depth, and quiet precision. Do not sound like a mystical astrologer, life coach, or motivational speaker. Avoid spiritual fluff, generic affirmations, and therapy clichés.
 
 Sun Sign: ${sign}
+Moon Sign: ${astrology.moonSign || 'unknown'}
+Rising Sign: ${astrology.risingSign || 'unknown'}
 Birth Date: ${birthDate || 'unknown'}
 Birth Time: ${birthTime || 'unknown'}
 Birth Location: ${birthLocation || 'unknown'}
@@ -488,11 +492,13 @@ If this response fails validation, rewrite the same five fields with the same ru
 }
 
 app.post('/api/reading', async (req, res) => {
-  const { birthDate, birthTime, birthLocation } = req.body || {}
+  const { birthDate, birthTime, birthLocation, astrology } = req.body || {}
+  const readingContext = { birthDate, birthTime, birthLocation, astrology }
+  console.log('[reading-request]', readingContext)
   METRICS.requests += 1
   if (!openai) {
     console.warn('OpenAI API key not configured — returning local reading')
-    const local = generateLocalReading(birthDate, birthTime, birthLocation)
+    const local = generateLocalReading(readingContext)
     res.set('X-Reading-Source', 'local')
     METRICS.local += 1
     console.log('metrics:', METRICS)
@@ -500,8 +506,7 @@ app.post('/api/reading', async (req, res) => {
   }
 
   try {
-    const sign = getZodiacSign(birthDate)
-    const { reading, source } = await generateOpenAIReading(sign, birthDate, birthTime, birthLocation)
+    const { reading, source } = await generateOpenAIReading(readingContext)
 
     res.set('X-Reading-Source', source)
     METRICS.openaiSuccess += 1
@@ -523,7 +528,7 @@ app.post('/api/reading', async (req, res) => {
 
     if (isQuota || isInvalidResponse) {
       console.warn('Using fallback reading source')
-      const local = generateLocalReading(birthDate, birthTime, birthLocation)
+      const local = generateLocalReading(readingContext)
       res.set('X-Reading-Source', 'fallback')
       METRICS.local += 1
       if (isQuota) {
